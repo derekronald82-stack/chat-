@@ -335,7 +335,11 @@
 
     <div class="field">
       <div class="section-label">API Key</div>
-      <input type="password" id="apiKey" placeholder="sk-... or nvapi-...">
+      <input type="password" id="apiKey" placeholder="sk-... or nvapi-..." autocomplete="off">
+      <label style="display:flex; align-items:center; gap:8px; margin-top:2px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; font-size:10.5px; user-select:none;">
+        <input type="checkbox" id="rememberKey" style="accent-color: var(--cyan); width:14px; height:14px;">
+        Remember key on this device
+      </label>
     </div>
 
     <div class="field">
@@ -505,6 +509,38 @@ function populateModels(){
 document.getElementById('modelSelect').addEventListener('change', updateHeader);
 document.getElementById('apiKey').addEventListener('input', updateStatus);
 
+// Remember API key locally (user must paste key themselves; nothing is hardcoded)
+const REMEMBER_KEY_STORAGE = 'nexus_apiKey';
+function syncRememberKeyUI(){
+  const rememberCb = document.getElementById('rememberKey');
+  const saved = localStorage.getItem(REMEMBER_KEY_STORAGE) || '';
+  if(saved && saved.length > 0){
+    document.getElementById('apiKey').value = saved;
+    rememberCb.checked = true;
+  }
+  updateStatus();
+}
+
+document.getElementById('rememberKey').addEventListener('change', (e)=>{
+  const keyVal = document.getElementById('apiKey').value.trim();
+  if(e.target.checked){
+    if(keyVal.length > 0) localStorage.setItem(REMEMBER_KEY_STORAGE, keyVal);
+  } else {
+    localStorage.removeItem(REMEMBER_KEY_STORAGE);
+  }
+});
+
+// If user edits key while checkbox is on, keep it updated
+document.getElementById('apiKey').addEventListener('input', ()=>{
+  const rememberCb = document.getElementById('rememberKey');
+  if(rememberCb.checked){
+    const keyVal = document.getElementById('apiKey').value.trim();
+    if(keyVal.length > 0) localStorage.setItem(REMEMBER_KEY_STORAGE, keyVal);
+  }
+});
+
+syncRememberKeyUI();
+
 function updateHeader(){
   const sel = document.getElementById('modelSelect');
   const label = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : 'Select a model';
@@ -645,4 +681,3 @@ async function sendMessage(){
 </body>
 </html>
 
-</html>

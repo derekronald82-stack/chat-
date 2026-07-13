@@ -53,6 +53,27 @@
     padding:22px 18px;
     gap:22px;
     overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  /* Ensure mobile sidebar content never gets clipped */
+  .sidebar > *{ min-width:0; }
+  .sidebar .field{ min-width:0; }
+
+  /* Mobile: reduce extra gap so inputs fit without hiding */
+  @media (max-width:768px){
+    .sidebar{ gap:16px; padding:20px 14px; }
+  }
+
+  @media (max-width:425px){
+    .sidebar{ gap:14px; padding:18px 12px; }
+    .field{ gap:5px; }
+  }
+
+  /* Mobile: keep the API key input visible and not clipped */
+  @media (max-width:768px){
+    #apiKey{ width:100%; }
+    #rememberKey{ flex:0 0 auto; }
   }
   .sidebar-overlay{
     display:none;

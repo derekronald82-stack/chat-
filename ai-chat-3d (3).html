@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NEXUS — 3D AI Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#0a0d16;
+    --bg-panel:#11162290;
+    --bg-panel-solid:#131826;
+    --line:#26304a;
+    --cyan:#5eebd8;
+    --violet:#8b7fff;
+    --text:#e8ecf1;
+    --text-dim:#8892a8;
+    --danger:#ff6b7a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    background:var(--bg-deep);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    height:100%;
+    overflow:hidden;
+  }
+  #scene{
+    position:fixed; inset:0; z-index:0;
+  }
+  .app{
+    position:relative; z-index:1;
+    display:grid;
+    grid-template-columns:280px 1fr;
+    height:100vh;
+    width:100vw;
+  }
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    background:var(--bg-panel);
+    backdrop-filter:blur(18px);
+    border-right:1px solid var(--line);
+    display:flex; flex-direction:column;
+    padding:22px 18px;
+    gap:22px;
+  }
+  .brand{
+    display:flex; align-items:center; gap:10px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700; font-size:19px; letter-spacing:0.5px;
+  }
+  .brand .dot{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--cyan);
+    box-shadow:0 0 12px var(--cyan);
+  }
+  .section-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px; letter-spacing:1.5px;
+    color:var(--text-dim); text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  select, input[type=password], input[type=text]{
+    background:#0d111c;
+    border:1px solid var(--line);
+    color:var(--text);
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    padding:9px 10px;
+    border-radius:8px;
+    outline:none;
+    width:100%;
+  }
+  select:focus, input:focus{ border-color:var(--cyan); box-shadow:0 0 0 3px rgba(94,235,216,0.12);}
+  .provider-toggle{
+    display:flex; gap:6px;
+    background:#0d111c;
+    border:1px solid var(--line);
+    border-radius:9px;
+    padding:4px;
+  }
+  .provider-toggle button{
+    flex:1; padding:8px 6px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px; letter-spacing:0.5px;
+    background:transparent; border:none; border-radius:6px;
+    color:var(--text-dim); cursor:pointer;
+    transition:all .2s;
+  }
+  .provider-toggle button.active{
+    background:linear-gradient(135deg, rgba(94,235,216,0.18), rgba(139,127,255,0.18));
+    color:var(--text);
+    box-shadow:inset 0 0 0 1px rgba(94,235,216,0.4);
+  }
+  .status-line{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px; color:var(--text-dim);
+    display:flex; align-items:center; gap:7px;
+    margin-top:auto;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+  }
+  .status-dot{ width:7px; height:7px; border-radius:50%; background:var(--danger); transition:background .3s;}
+  .status-dot.ready{ background:var(--cyan); box-shadow:0 0 8px var(--cyan);}
+  .hint{ font-size:10.5px; color:var(--text-dim); line-height:1.5; }
+
+  /* ---------- Chat column ---------- */
+  .chat-col{ display:flex; flex-direction:column; height:100vh; }
+  .chat-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 26px; border-bottom:1px solid var(--line);
+    background:var(--bg-panel); backdrop-filter:blur(18px);
+  }
+  .model-name{
+    font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px;
+  }
+  .model-sub{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim); margin-top:2px;}
+  .clear-btn{
+    font-family:'JetBrains Mono',monospace; font-size:11px;
+    color:var(--text-dim); background:none; border:1px solid var(--line);
+    padding:7px 12px; border-radius:7px; cursor:pointer; letter-spacing:0.5px;
+  }
+  .clear-btn:hover{ color:var(--text); border-color:var(--cyan); }
+
+  .messages{
+    flex:1; overflow-y:auto; padding:28px 8% 10px;
+    display:flex; flex-direction:column; gap:18px;
+    scroll-behavior:smooth;
+  }
+  .messages::-webkit-scrollbar{ width:6px; }
+  .messages::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+
+  .msg{ display:flex; gap:12px; max-width:78%; animation:rise .35s ease; }
+  .msg.user{ align-self:flex-end; flex-direction:row-reverse; }
+  @keyframes rise{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+
+  .avatar{
+    width:30px; height:30px; border-radius:9px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600;
+  }
+  .avatar.ai{ background:linear-gradient(135deg,var(--cyan),var(--violet)); color:#0a0d16; }
+  .avatar.user{ background:#1c2438; border:1px solid var(--line); color:var(--text-dim); }
+
+  .bubble{
+    padding:12px 15px; border-radius:13px;
+    font-size:14.5px; line-height:1.55;
+    background:var(--bg-panel-solid); border:1px solid var(--line);
+    white-space:pre-wrap;
+  }
+  .msg.user .bubble{
+    background:linear-gradient(135deg, rgba(139,127,255,0.16), rgba(94,235,216,0.10));
+    border-color:rgba(139,127,255,0.35);
+  }
+  .msg.error .bubble{ border-color:var(--danger); color:#ffb3ba; }
+
+  .typing{ display:flex; gap:4px; padding:6px 2px; }
+  .typing span{
+    width:6px; height:6px; border-radius:50%; background:var(--cyan);
+    animation:blink 1.1s infinite ease-in-out;
+  }
+  .typing span:nth-child(2){ animation-delay:.15s; }
+  .typing span:nth-child(3){ animation-delay:.3s; }
+  @keyframes blink{ 0%,80%,100%{opacity:.25; transform:scale(0.8);} 40%{opacity:1; transform:scale(1);} }
+
+  .empty-state{
+    margin:auto; text-align:center; color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace; font-size:12.5px; max-width:340px; line-height:1.7;
+  }
+  .empty-state .big{
+    font-family:'Space Grotesk',sans-serif; font-size:20px; color:var(--text);
+    font-weight:600; margin-bottom:10px;
+  }
+
+  .composer{
+    padding:16px 8% 22px;
+    display:flex; gap:10px; align-items:flex-end;
+  }
+  .composer-inner{
+    flex:1; display:flex; align-items:flex-end; gap:8px;
+    background:var(--bg-panel-solid); border:1px solid var(--line);
+    border-radius:14px; padding:8px 8px 8px 16px;
+  }
+  .composer-inner:focus-within{ border-color:var(--cyan); box-shadow:0 0 0 3px rgba(94,235,216,0.10);}
+  textarea{
+    flex:1; background:none; border:none; outline:none; resize:none;
+    color:var(--text); font-family:'Inter',sans-serif; font-size:14.5px;
+    max-height:140px; padding:8px 0;
+  }
+  .send-btn{
+    width:38px; height:38px; border-radius:10px; border:none; cursor:pointer;
+    background:linear-gradient(135deg,var(--cyan),var(--violet));
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    transition:transform .15s;
+  }
+  .send-btn:hover{ transform:scale(1.06); }
+  .send-btn:disabled{ opacity:.35; cursor:default; transform:none; }
+  .send-btn svg{ width:16px; height:16px; }
+
+  @media (max-width:760px){
+    .app{ grid-template-columns:1fr; }
+    .sidebar{ display:none; }
+    .messages{ padding:20px 5%; }
+  }
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="dot"></span>NEXUS</div>
+
+    <div class="field">
+      <div class="section-label">Provider</div>
+      <div class="provider-toggle">
+        <button id="btn-openrouter" class="active" onclick="setProvider('openrouter')">OpenRouter</button>
+        <button id="btn-nvidia" onclick="setProvider('nvidia')">NVIDIA NIM</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="section-label">API Key</div>
+      <input type="password" id="apiKey" placeholder="sk-... or nvapi-...">
+    </div>
+
+    <div class="field">
+      <div class="section-label">Model</div>
+      <select id="modelSelect"></select>
+    </div>
+
+    <div class="field">
+      <div class="section-label">System Prompt</div>
+      <textarea id="sysPrompt" rows="3" style="background:#0d111c;border:1px solid var(--line);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11.5px;border-radius:8px;padding:9px;resize:vertical;outline:none;" placeholder="Optional...">You are a helpful, concise assistant.</textarea>
+    </div>
+
+    <div class="hint" id="corsHint">Calls go directly from your browser to the provider using your key. Some providers block browser CORS — if requests fail, route through your own backend proxy.</div>
+
+    <div class="status-line">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">No API key set</span>
+    </div>
+  </aside>
+
+  <section class="chat-col">
+    <div class="chat-header">
+      <div>
+        <div class="model-name" id="headerModel">Select a model</div>
+        <div class="model-sub" id="headerProvider">via OpenRouter</div>
+      </div>
+      <button class="clear-btn" onclick="clearChat()">CLEAR</button>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="empty-state" id="emptyState">
+        <div class="big">Start a conversation</div>
+        Set your API key and model on the left, then send a message. The core behind this panel reacts while the model is thinking.
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-inner">
+        <textarea id="input" rows="1" placeholder="Message the model..." onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12L20 4L14 20L11 13L4 12Z" fill="#0a0d16"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ============ THREE.JS AMBIENT CORE ============ */
+let scene, camera, renderer, core, particles, clock;
+let thinkLevel = 0; // 0 = idle, 1 = actively streaming
+
+function initScene(){
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.set(0, 0, 9);
+
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  document.getElementById('scene').appendChild(renderer.domElement);
+
+  const geo = new THREE.IcosahedronGeometry(2.1, 3);
+  const mat = new THREE.MeshBasicMaterial({ color:0x5eebd8, wireframe:true, transparent:true, opacity:0.35 });
+  core = new THREE.Mesh(geo, mat);
+  core.position.set(4.2, -0.5, -2);
+  scene.add(core);
+
+  const geo2 = new THREE.IcosahedronGeometry(1.3, 2);
+  const mat2 = new THREE.MeshBasicMaterial({ color:0x8b7fff, wireframe:true, transparent:true, opacity:0.28 });
+  const core2 = new THREE.Mesh(geo2, mat2);
+  core2.position.copy(core.position);
+  scene.add(core2);
+  core.inner = core2;
+
+  const pCount = 300;
+  const positions = new Float32Array(pCount*3);
+  for(let i=0;i<pCount;i++){
+    positions[i*3] = (Math.random()-0.5)*24;
+    positions[i*3+1] = (Math.random()-0.5)*14;
+    positions[i*3+2] = (Math.random()-0.5)*18 - 4;
+  }
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  const pMat = new THREE.PointsMaterial({ color:0x3a4468, size:0.045, transparent:true, opacity:0.7 });
+  particles = new THREE.Points(pGeo, pMat);
+  scene.add(particles);
+
+  clock = new THREE.Clock();
+  animate();
+  window.addEventListener('resize', onResize);
+}
+
+function onResize(){
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  const speed = 0.15 + thinkLevel*1.1;
+  core.rotation.y += 0.0025 + thinkLevel*0.02;
+  core.rotation.x += 0.0012 + thinkLevel*0.012;
+  core.inner.rotation.y -= 0.003 + thinkLevel*0.03;
+  core.inner.rotation.z += 0.002 + thinkLevel*0.018;
+  const pulse = 1 + Math.sin(t*(1.5+thinkLevel*4))*0.04*(1+thinkLevel*2);
+  core.scale.setScalar(pulse);
+  core.material.opacity = 0.28 + thinkLevel*0.35;
+  core.inner.material.opacity = 0.22 + thinkLevel*0.4;
+  particles.rotation.y += 0.0004 + thinkLevel*0.001;
+  renderer.render(scene, camera);
+}
+
+initScene();
+
+/* ============ APP STATE ============ */
+const MODELS = {
+  openrouter: [
+    { id:'openai/gpt-4o-mini', label:'GPT-4o mini' },
+    { id:'anthropic/claude-3.5-sonnet', label:'Claude 3.5 Sonnet' },
+    { id:'google/gemini-2.0-flash-001', label:'Gemini 2.0 Flash' },
+    { id:'meta-llama/llama-3.3-70b-instruct', label:'Llama 3.3 70B' },
+    { id:'mistralai/mixtral-8x7b-instruct', label:'Mixtral 8x7B' }
+  ],
+  nvidia: [
+    { id:'meta/llama-3.1-70b-instruct', label:'Llama 3.1 70B (NIM)' },
+    { id:'nvidia/nemotron-4-340b-instruct', label:'Nemotron-4 340B' },
+    { id:'mistralai/mixtral-8x22b-instruct-v0.1', label:'Mixtral 8x22B' },
+    { id:'google/gemma-2-27b-it', label:'Gemma 2 27B' }
+  ]
+};
+const ENDPOINTS = {
+  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+  nvidia: 'https://integrate.api.nvidia.com/v1/chat/completions'
+};
+
+let provider = 'openrouter';
+let history = [];
+
+function setProvider(p){
+  provider = p;
+  document.getElementById('btn-openrouter').classList.toggle('active', p==='openrouter');
+  document.getElementById('btn-nvidia').classList.toggle('active', p==='nvidia');
+  populateModels();
+  updateStatus();
+}
+
+function populateModels(){
+  const sel = document.getElementById('modelSelect');
+  sel.innerHTML = '';
+  MODELS[provider].forEach(m=>{
+    const opt = document.createElement('option');
+    opt.value = m.id; opt.textContent = m.label;
+    sel.appendChild(opt);
+  });
+  updateHeader();
+}
+
+document.getElementById('modelSelect').addEventListener('change', updateHeader);
+document.getElementById('apiKey').addEventListener('input', updateStatus);
+
+function updateHeader(){
+  const sel = document.getElementById('modelSelect');
+  const label = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : 'Select a model';
+  document.getElementById('headerModel').textContent = label;
+  document.getElementById('headerProvider').textContent = 'via ' + (provider==='openrouter' ? 'OpenRouter' : 'NVIDIA NIM');
+}
+
+function updateStatus(){
+  const key = document.getElementById('apiKey').value.trim();
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  if(key.length > 5){
+    dot.classList.add('ready');
+    text.textContent = 'Key set · ' + (provider==='openrouter'?'OpenRouter':'NVIDIA NIM') + ' ready';
+  } else {
+    dot.classList.remove('ready');
+    text.textContent = 'No API key set';
+  }
+}
+
+populateModels();
+updateStatus();
+
+/* ============ CHAT LOGIC ============ */
+function autoGrow(el){
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+function handleKey(e){
+  if(e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    sendMessage();
+  }
+}
+function clearChat(){
+  history = [];
+  document.getElementById('messages').innerHTML = '<div class="empty-state" id="emptyState"><div class="big">Start a conversation</div>Set your API key and model on the left, then send a message. The core behind this panel reacts while the model is thinking.</div>';
+}
+
+function appendMessage(role, text, isError){
+  const empty = document.getElementById('emptyState');
+  if(empty) empty.remove();
+  const wrap = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role + (isError ? ' error' : '');
+  const av = document.createElement('div');
+  av.className = 'avatar ' + (role==='user' ? 'user' : 'ai');
+  av.textContent = role==='user' ? 'YOU' : 'AI';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  div.appendChild(av); div.appendChild(bubble);
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return bubble;
+}
+
+function appendTyping(){
+  const wrap = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ai';
+  div.id = 'typingRow';
+  div.innerHTML = '<div class="avatar ai">AI</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+function removeTyping(){
+  const t = document.getElementById('typingRow');
+  if(t) t.remove();
+}
+
+async function sendMessage(){
+  const input = document.getElementById('input');
+  const text = input.value.trim();
+  if(!text) return;
+  const key = document.getElementById('apiKey').value.trim();
+  const model = document.getElementById('modelSelect').value;
+
+  if(!key){
+    appendMessage('ai', 'Add your API key in the left panel before sending a message.', true);
+    return;
+  }
+
+  appendMessage('user', text);
+  history.push({ role:'user', content:text });
+  input.value = ''; autoGrow(input);
+  document.getElementById('sendBtn').disabled = true;
+  thinkLevel = 1;
+  appendTyping();
+
+  const sys = document.getElementById('sysPrompt').value.trim();
+  const messages = sys ? [{role:'system', content:sys}, ...history] : [...history];
+
+  try{
+    const res = await fetch(ENDPOINTS[provider], {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':'Bearer ' + key
+      },
+      body: JSON.stringify({ model, messages, temperature:0.7 })
+    });
+
+    if(!res.ok){
+      const errText = await res.text();
+      throw new Error('HTTP ' + res.status + ' — ' + errText.slice(0,200));
+    }
+
+    const data = await res.json();
+    const reply = data.choices && data.choices[0] && data.choices[0].message
+      ? data.choices[0].message.content
+      : '(no content returned)';
+
+    removeTyping();
+    appendMessage('ai', reply);
+    history.push({ role:'assistant', content:reply });
+
+  } catch(err){
+    removeTyping();
+    appendMessage('ai', 'Request failed: ' + err.message + '\n\nIf this is a CORS error, this provider likely blocks direct browser calls — route the request through your own backend proxy instead.', true);
+  } finally {
+    thinkLevel = 0;
+    document.getElementById('sendBtn').disabled = false;
+  }
+}
+</script>
+</body>
+</html>

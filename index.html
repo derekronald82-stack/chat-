@@ -35,6 +35,7 @@
     display:grid;
     grid-template-columns:280px 1fr;
     height:100vh;
+    height:100dvh;
     width:100vw;
   }
   /* ---------- Sidebar ---------- */
@@ -45,7 +46,21 @@
     display:flex; flex-direction:column;
     padding:22px 18px;
     gap:22px;
+    overflow-y:auto;
   }
+  .sidebar-overlay{
+    display:none;
+    position:fixed; inset:0; z-index:5;
+    background:rgba(5,7,12,0.55);
+  }
+  .icon-btn{
+    display:none;
+    width:36px; height:36px; border-radius:9px;
+    align-items:center; justify-content:center;
+    background:none; border:1px solid var(--line);
+    color:var(--text); cursor:pointer; flex-shrink:0;
+  }
+  .icon-btn svg{ width:17px; height:17px; }
   .brand{
     display:flex; align-items:center; gap:10px;
     font-family:'Space Grotesk',sans-serif;
@@ -108,20 +123,25 @@
   .hint{ font-size:10.5px; color:var(--text-dim); line-height:1.5; }
 
   /* ---------- Chat column ---------- */
-  .chat-col{ display:flex; flex-direction:column; height:100vh; }
+  .chat-col{ display:flex; flex-direction:column; height:100vh; height:100dvh; min-width:0; }
   .chat-header{
     display:flex; align-items:center; justify-content:space-between;
     padding:18px 26px; border-bottom:1px solid var(--line);
     background:var(--bg-panel); backdrop-filter:blur(18px);
+    gap:12px;
   }
+  .header-left{ display:flex; align-items:center; gap:12px; min-width:0; }
+  .header-text{ min-width:0; overflow:hidden; }
   .model-name{
     font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .model-sub{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim); margin-top:2px;}
   .clear-btn{
     font-family:'JetBrains Mono',monospace; font-size:11px;
     color:var(--text-dim); background:none; border:1px solid var(--line);
     padding:7px 12px; border-radius:7px; cursor:pointer; letter-spacing:0.5px;
+    flex-shrink:0;
   }
   .clear-btn:hover{ color:var(--text); border-color:var(--cyan); }
 
@@ -202,17 +222,48 @@
 
   @media (max-width:760px){
     .app{ grid-template-columns:1fr; }
-    .sidebar{ display:none; }
-    .messages{ padding:20px 5%; }
+    .icon-btn{ display:flex; }
+    .sidebar{
+      position:fixed; top:0; left:0; z-index:6;
+      width:82vw; max-width:300px; height:100vh; height:100dvh;
+      transform:translateX(-100%);
+      transition:transform .25s ease;
+      box-shadow:8px 0 30px rgba(0,0,0,0.4);
+    }
+    .sidebar.open{ transform:translateX(0); }
+    .sidebar-overlay.open{ display:block; }
+
+    .chat-header{ padding:14px 14px; }
+    .brand{ font-size:17px; }
+    .clear-btn{ padding:7px 10px; font-size:10.5px; }
+
+    .messages{ padding:18px 4% 8px; gap:14px; }
+    .msg{ max-width:88%; gap:9px; }
+    .avatar{ width:26px; height:26px; border-radius:8px; font-size:10px; }
+    .bubble{ padding:10px 13px; font-size:14px; }
+
+    .composer{ padding:10px 4% 16px; gap:8px; }
+    .composer-inner{ padding:6px 6px 6px 14px; border-radius:16px; }
+    textarea{ font-size:15px; padding:9px 0; }
+    .send-btn{ width:40px; height:40px; }
+
+    .empty-state{ max-width:280px; padding:0 6px; }
+    .empty-state .big{ font-size:18px; }
+  }
+
+  @media (max-width:400px){
+    .msg{ max-width:94%; }
+    .model-sub{ display:none; }
   }
 </style>
 </head>
 <body>
 
 <div id="scene"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
 <div class="app">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="brand"><span class="dot"></span>NEXUS</div>
 
     <div class="field">
@@ -248,9 +299,14 @@
 
   <section class="chat-col">
     <div class="chat-header">
-      <div>
-        <div class="model-name" id="headerModel">Select a model</div>
-        <div class="model-sub" id="headerProvider">via OpenRouter</div>
+      <div class="header-left">
+        <button class="icon-btn" onclick="openSidebar()" aria-label="Open settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="header-text">
+          <div class="model-name" id="headerModel">Select a model</div>
+          <div class="model-sub" id="headerProvider">via OpenRouter</div>
+        </div>
       </div>
       <button class="clear-btn" onclick="clearChat()">CLEAR</button>
     </div>
@@ -412,6 +468,16 @@ function updateStatus(){
 populateModels();
 updateStatus();
 
+/* ============ MOBILE SIDEBAR DRAWER ============ */
+function openSidebar(){
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarOverlay').classList.add('open');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
 /* ============ CHAT LOGIC ============ */
 function autoGrow(el){
   el.style.height = 'auto';
@@ -472,6 +538,7 @@ async function sendMessage(){
     return;
   }
 
+  closeSidebar();
   appendMessage('user', text);
   history.push({ role:'user', content:text });
   input.value = ''; autoGrow(input);
@@ -517,3 +584,4 @@ async function sendMessage(){
 </script>
 </body>
 </html>
+
